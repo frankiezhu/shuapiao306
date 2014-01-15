@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document>
+        <!--账户信息-->
+        <user>xx@xx.com</user>
+        <passwd>xxxxxx</passwd>
+        
+        <!--想买的车次,为空的话会进入交互阶段, 需要手动输入车次,建议设置上, 英文";"号分隔-->
+        <buy_list>K181</buy_list>
+        
+        <!--忽略的车次, 英文";"号分隔-->
+        <ingnore_list>L74</ingnore_list>
+        
+        <!--座位类型,类型名对应:
+             "高级软卧":"gr_num", "软卧":"rw_num",  "软座":"rz_num",   "无座":"wz_num",
+         "硬卧":"yw_num",     "硬座":"yz_num",  "二等座":"ze_num", "一等座":"zy_num",
+                 "特等座":"tz_num",    "商务座":"swz_num",         
+        英文";"号分隔
+    -->
+        <care_seat_types>ze_num;zy_num</care_seat_types>
+        
+        <!--买票查询条件：时间、站点, 车站代码可以在info目录station_code.txt里查-->
+        <query_data>
+                <train_date>2014-01-17</train_date>
+                <from_station>SZQ</from_station>
+                <to_station>GZQ</to_station>
+                <purpose_codes>ADULT</purpose_codes>
+        </query_data>
+        
+        <!--乘客信息：姓名 身份证号码 电话, 可以有不超过5个person-->
+        <passengers>
+                <person>
+                        <name>张三</name>
+                        <id>123061230612306302</id>
+                        <tel>12306123061</tel>
+                </person>
+                <person>
+                        <name>李四</name>
+                        <id>123061230612306302</id>
+                        <tel>12306123061</tel>
+                </person>
+        </passengers>
+        
+        <!--刷新间隔-->
+        <query_sleep_time>1</query_sleep_time>
+        
+        <!--#自动识别验证码次数，验证码无重叠无背景时候识别率高，基于tesseract的OCR
+                #目前仅仅遇到过一次，几个小时，dns更新后连接到的服务器有背景干扰
+                #可以找到这种服务器并修改host让其一直连接此服务器
+                #或者做更多的图像相关处理，去除噪点再做OCR
+        -->
+        <max_auto_times>0</max_auto_times>
+</document>
