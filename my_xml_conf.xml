@@ -49,4 +49,6 @@
                 #或者做更多的图像相关处理，去除噪点再做OCR
         -->
         <max_auto_times>0</max_auto_times>
+        <!--要求输入验证码的时候播放音乐-->
+        <play_music>1</play_music>
 </document>

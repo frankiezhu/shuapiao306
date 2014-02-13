@@ -16,11 +16,12 @@ import logging
 import datetime
 import cProfile
 import subprocess
+import winsound
 import xml.etree.ElementTree
 
 
-CONF_NAME = '.\my_xml_conf.xml'
-
+CONF_NAME = './my_xml_conf.xml'
+MUSIC_NAME = './music.wav'
 ##############################################Conf#############################
 '''
    Config Class
@@ -35,6 +36,7 @@ class Config:
     passengers = []
     query_sleep_time = float(1)
     max_auto_times = int(0)
+    play_music = False
     seat_code_dict =  {
             "yz_num":["1"],
             "rz_num":["2"],
@@ -62,7 +64,7 @@ class Config:
         root = tree.getroot()
         self.user = root.findall('user')[0].text
         self.passwd = root.findall('passwd')[0].text
-        
+
         str_tmp = root.findall('buy_list')[0].text
         if str_tmp:
            self.buy_list = [x.strip() for x in str_tmp.strip().rstrip(';').split(';')]
@@ -88,11 +90,17 @@ class Config:
             person_info = {}
             person_info['name'] = person.findall('name')[0].text.strip()
             person_info['id'] = person.findall('id')[0].text.strip()
-            person_info['tel'] = person.findall('tel')[0].text.strip()
+            person_info['tel'] = ''
+            str_tmp = person.findall('tel')[0].text
+            if str_tmp:
+                person_info['tel'] = person.findall('tel')[0].text.strip()
             self.passengers.append(person_info)
             
         self.query_sleep_time = float(root.findall('query_sleep_time')[0].text.strip())
         self.max_auto_times = int(root.findall('max_auto_times')[0].text.strip())
+        tmp = root.findall('play_music')
+        if tmp and int(tmp[0].text.strip()):
+            self.play_music = True
         return True
 
     def show_config(self):
@@ -105,6 +113,7 @@ class Config:
         logger.info("Passengers:%s" % self.care_seat_types)
         logger.info("Sleep time:%f" % self.query_sleep_time)
         logger.info("Auto OCR: %d" % self.max_auto_times)
+        logger.info("Play music: %d" % self.play_music)
         logger.info("End\n")
 
 ####################################Global#######################################
@@ -189,7 +198,7 @@ class HttpAuto:
         self.ext_header = {
             "Accept":"*/*",
             "X-Requested-With":"XMLHttpRequest",
-            "Referer": "http://kyfw.12306.cn/otn/login/init#",
+            "Referer": "https://kyfw.12306.cn/otn/login/init#",
             "Accept-Language": "zh-cn",
             "Accept-Encoding": "gzip, deflate",
             "Connection":"Keep-Alive",
@@ -201,7 +210,7 @@ class HttpAuto:
         self.proxy_ext_header = {
             "Accept": "*/*",
             "X-Requested-With":"XMLHttpRequest",
-            "Referer": "http://kyfw.12306.cn/otn/login/init#",
+            "Referer": "https://kyfw.12306.cn/otn/login/init#",
             "Accept-Language": "zh-cn",
             "Accept-Encoding": "gzip, deflate",
             "Proxy-Connection": "Keep-Alive",
@@ -245,7 +254,7 @@ class HttpAuto:
         logger.info("old:%s" % self.oldPassengerStr)
 
     def logout(self):
-        url_logout = "http://kyfw.12306.cn/otn/login/loginOut"
+        url_logout = "https://kyfw.12306.cn/otn/login/loginOut"
         g_conn.request('540', url_logout, headers=self.proxy_ext_header)
         return True
                 
@@ -280,7 +289,7 @@ class HttpAuto:
         ret = False
         auto_times = g_conf.max_auto_times
         while 1:
-            url_pass_code = "http://kyfw.12306.cn/otn/passcodeNew/getPassCodeNew?module=%s&rand=%s" % (module, rand_method)
+            url_pass_code = "https://kyfw.12306.cn/otn/passcodeNew/getPassCodeNew?module=%s&rand=%s" % (module, rand_method)
             logger.info("send getPassCodeNew:%s" % datetime.datetime.now())
             header = ''
             if module == 'login':
@@ -326,7 +335,7 @@ class HttpAuto:
 
             data = []
             if module == 'passenger':
-                self.proxy_ext_header["Referer"] = "http://kyfw.12306.cn/otn/confirmPassenger/initDc#nogo"
+                self.proxy_ext_header["Referer"] = "https://kyfw.12306.cn/otn/confirmPassenger/initDc#nogo"
                 self.rand_code = read_pass_code
                 data = [
                         ("_json_att", ''),
@@ -346,7 +355,7 @@ class HttpAuto:
             post_data = urllib.urlencode(data)
             logger.info("send checkRandCodeAnsyn=====>:") #% post_data
             
-            url_check_rand = "http://kyfw.12306.cn/otn/passcodeNew/checkRandCodeAnsyn"
+            url_check_rand = "https://kyfw.12306.cn/otn/passcodeNew/checkRandCodeAnsyn"
             g_conn.request('POST', url_check_rand, body=post_data, headers=header)
             res = g_conn.getresponse()
             data = res.read()
@@ -380,7 +389,7 @@ class HttpAuto:
         if not self.check_pass_code():
             return False
         logger.info("#############################Step2:Login#########")
-        url_login = "http://kyfw.12306.cn/otn/login/loginAysnSuggest"
+        url_login = "https://kyfw.12306.cn/otn/login/loginAysnSuggest"
         data = [
                 ("loginUserDTO.user_name", g_conf.user),
                 ("userDTO.password", g_conf.passwd),
@@ -425,7 +434,13 @@ class HttpAuto:
                 continue
             has_ticket = False
             for care_type in g_conf.care_seat_types:
-                if item['queryLeftNewDTO'][care_type] != "--"  and item['queryLeftNewDTO'][care_type] != u"无":
+                ticket_left = item['queryLeftNewDTO'][care_type]
+                if ticket_left == "--"  or ticket_left == u"无":
+                    continue
+                if ticket_left == u"有":
+                    has_ticket = True
+                    break
+                elif ticket_left.isdigit() and int(ticket_left) >= len(g_conf.passengers):
                     has_ticket = True
                     break
             if has_ticket:
@@ -467,7 +482,7 @@ class HttpAuto:
             if not result.has_key(cmd):
                 logger.info("invalid input, retry")
                 return -2
-            self.buying_train = train_code
+            self.buying_train = cmd
             ret = self.buy(result[cmd])
             if not ret:
                 logger.info("Err during buy")
@@ -478,8 +493,8 @@ class HttpAuto:
     @retries(3)           
     def query(self):
         logger.info("#############################Step3:Query#########")
-        self.proxy_ext_header["Referer"] = "http://kyfw.12306.cn/otn/leftTicket/init"
-        url_query = "http://kyfw.12306.cn/otn/leftTicket/query?" + urllib.urlencode(g_conf.query_data)
+        self.proxy_ext_header["Referer"] = "https://kyfw.12306.cn/otn/leftTicket/init"
+        url_query = "https://kyfw.12306.cn/otn/leftTicket/query?" + urllib.urlencode(g_conf.query_data)
         logger.info("start query======>%s" % url_query)
         want_special = False
         
@@ -488,7 +503,7 @@ class HttpAuto:
             logger.info("JUST For:%s" % (','.join(g_conf.buy_list)))
         else:
             logger.info(u"车次 出发->到达 时间:到达 历时 商务座 特等座 一等座 二等座 高级软卧 软卧 硬卧 软座 硬座 无座 其他备注")
-        #"http://kyfw.12306.cn/otn/leftTicket/query?leftTicketDTO.train_date=2014-01-04&leftTicketDTO.from_station=SHH&leftTicketDTO.to_station=NJH&purpose_codes=ADULT"
+        #"https://kyfw.12306.cn/otn/leftTicket/query?leftTicketDTO.train_date=2014-01-04&leftTicketDTO.from_station=SHH&leftTicketDTO.to_station=NJH&purpose_codes=ADULT"
         q_cnt = 0
         while 1:
             q_cnt = q_cnt + 1
@@ -536,6 +551,10 @@ class HttpAuto:
             l = seat_type.split('_')
             l[0] = l[0].upper()
             new_type = '_'.join(l)
+            logger.info("check left tickets for train:%s, seat_type:%s, num:%s" % (self.buying_train, new_type, new_detail[new_type]))
+            if int(new_detail[new_type]) >= len(g_conf.passengers):
+                ok_seat = seat_type
+                break
             #special_case for dongche
             if is_dongche:
                 if seat_type == "td_num":
@@ -544,10 +563,10 @@ class HttpAuto:
                     new_type = "EDRZ_num"
                 elif seat_type == "zy_num":
                     new_type = "YDRZ_num"
-            logger.info("check left tickets for train:%s, seat_type:%s, num:%s" % (self.buying_train, new_type, new_detail[new_type]))
-            if int(new_detail[new_type]) > len(g_conf.passengers):
-                ok_seat = seat_type
-                break
+                logger.info("check left tickets for train:%s, seat_type:%s, num:%s" % (self.buying_train, new_type, new_detail[new_type]))
+                if int(new_detail[new_type]) >= len(g_conf.passengers):
+                    ok_seat = seat_type
+                    break
         if not ok_seat:
             logger.error("No seats on train:%s, detail:%s", self.buying_train, new_detail)
             return False
@@ -572,7 +591,7 @@ class HttpAuto:
     @retries(3)
     def confirmPassenger_get_token(self):
         logger.info("#############################Step6:confirmPassenger_get_token #########")
-        url_confirm_passenger = "http://kyfw.12306.cn/otn/confirmPassenger/initDc"
+        url_confirm_passenger = "https://kyfw.12306.cn/otn/confirmPassenger/initDc"
         g_conn.request('GET', url_confirm_passenger, headers=self.proxy_ext_header)
         res = g_conn.getresponse()
         data = res.read()
@@ -609,7 +628,7 @@ class HttpAuto:
     @retries(3)
     def getQueueCount(self, item):
         logger.info("#############################Step10:getQueueCount #########")
-        url_queue_count = "http://kyfw.12306.cn/otn/confirmPassenger/getQueueCount"
+        url_queue_count = "https://kyfw.12306.cn/otn/confirmPassenger/getQueueCount"
         #buy_date = 'Sun Jan 5 00:00:00 UTC+0800 2014'
         tlist = time.ctime().split()
         tlist[3] = '00:00:00'
@@ -644,7 +663,7 @@ class HttpAuto:
     @retries(3)
     def checkOrderInfo(self):
         logger.info("#############################Step9:checkOrderInfo #########")
-        url_check_order = "http://kyfw.12306.cn/otn/confirmPassenger/checkOrderInfo"
+        url_check_order = "https://kyfw.12306.cn/otn/confirmPassenger/checkOrderInfo"
         data = [
             ("cancel_flag", "2"),
             ("bed_level_order_num", "000000000000000000000000000000"),
@@ -672,7 +691,7 @@ class HttpAuto:
     @retries(3)
     def checkUser(self):
         logger.info("#############################Step4:checkUser #########")
-        url_check_info = "http://kyfw.12306.cn/otn/login/checkUser"
+        url_check_info = "https://kyfw.12306.cn/otn/login/checkUser"
         data = [
                 ('_json_att', ''),
                 ]
@@ -693,7 +712,7 @@ class HttpAuto:
     @retries(3)
     def submitOrderRequest(self, item):
         logger.info("#############################Step5:submitOrderRequest #########")
-        url_submit = "http://kyfw.12306.cn/otn/leftTicket/submitOrderRequest"
+        url_submit = "https://kyfw.12306.cn/otn/leftTicket/submitOrderRequest"
         post_data = "secretStr=" + item['secretStr']+"&train_date=" \
                     + item['queryLeftNewDTO']['start_train_date'] \
                     + "&back_train_date=" + item['queryLeftNewDTO']['start_train_date'] \
@@ -720,7 +739,7 @@ class HttpAuto:
     @retries(3)
     def confirmSingleForQueue(self):
         logger.info("#############################Step11:confirmSingleForQueue #########")
-        url_check_info = "http://kyfw.12306.cn/otn/confirmPassenger/confirmSingleForQueue"
+        url_check_info = "https://kyfw.12306.cn/otn/confirmPassenger/confirmSingleForQueue"
         data = [
                 ('passengerTicketStr', self.passengerTicketStr),
                 ("oldPassengerStr", self.oldPassengerStr),
@@ -749,7 +768,7 @@ class HttpAuto:
     @retries(5)    
     def queryOrderWaitTime(self):
         logger.info("#############################Step12:queryOrderWaitTime #########")
-        url_query_wait = "http://kyfw.12306.cn/otn/confirmPassenger/queryOrderWaitTime?"
+        url_query_wait = "https://kyfw.12306.cn/otn/confirmPassenger/queryOrderWaitTime?"
         cnt = 0
         while 1: 
             data = [
@@ -781,7 +800,7 @@ class HttpAuto:
     @retries(3)
     def resultOrderForDcQueue(self):
         logger.info("#############################Step13:resultOrderForDcQueue #########")
-        url_result = "http://kyfw.12306.cn/otn/confirmPassenger/resultOrderForDcQueue"
+        url_result = "https://kyfw.12306.cn/otn/confirmPassenger/resultOrderForDcQueue"
         data = [
                 ('orderSequence_no', self.orderId),
                 ('_json_att', ''),
@@ -811,7 +830,7 @@ class HttpAuto:
     @retries(3)
     def get_passenger_info(self):
         logger.info("#############################Step7:getPassengerDTOs #########")
-        url_get_passager_info = "http://kyfw.12306.cn/otn/confirmPassenger/getPassengerDTOs"
+        url_get_passager_info = "https://kyfw.12306.cn/otn/confirmPassenger/getPassengerDTOs"
         data = [
                 ('_json_att', ''),
                 ('REPEAT_SUBMIT_TOKEN', self.globalRepeatSubmitToken)
@@ -835,9 +854,11 @@ class HttpAuto:
         #Step6
         if not self.confirmPassenger_get_token():
             return False
-        self.proxy_ext_header["Referer"] = "http://kyfw.12306.cn/otn/confirmPassenger/initDc#nogo"
+        self.proxy_ext_header["Referer"] = "https://kyfw.12306.cn/otn/confirmPassenger/initDc#nogo"
         #Step7
             #self.get_passenger_info
+        if g_conf.play_music:
+            play_music()
         #Step8
         if not self.check_rand_code():
             return False
@@ -885,7 +906,7 @@ def test_reconnect():
         "User-Agent": "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)",
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
     }
-    url = "http://www.baidu.com"
+    url = "https://www.baidu.com"
     for i in range(3):
         logger.info("send")
         g_conn.request('GET', url, headers=header)
@@ -902,7 +923,7 @@ def test_get_svr_ips():
 
 def main(conf_name):
     #set file log
-    f_handler = logging.FileHandler('.\log.txt')
+    f_handler = logging.FileHandler('./log.txt')
     f_formatter = logging.Formatter('[%(asctime)s,%(levelname)s,%(filename)s,%(lineno)d]:%(message)s')
     f_handler.setFormatter(f_formatter)
     logger.addHandler(f_handler)
@@ -913,37 +934,55 @@ def main(conf_name):
     logger.addHandler(c_handler)
     logger.setLevel(logging.DEBUG)
 
-    if not g_conf.read_config(conf_name):
+    try:
+        if not g_conf.read_config(conf_name):
+            return False
+        g_conf.show_config()
+    except Exception as e:
+        logger.error(u"配置有误!")
+        logger.error(traceback.format_exc())
         return False
-    g_conf.show_config()
+    
 
     #test_retries()
     logger.info("connecting......")
     g_conn.connect()
 
-    ha = HttpAuto()
-    if not ha.loginAysnSuggest():
-        return False
 
+    has_login = False
+    ha = ''
     while 1:
         try:
-            if ha.query():
-                break
+            if not has_login:
+                ha = HttpAuto()
+                if not ha.loginAysnSuggest():
+                    return False
+                has_login = True
+            ha.query()
         except UnFinishedException as e:
             logger.error(u"未完成的订单，请用浏览器查看！")
-            return True
         except ValueError as e:
             logger.error(u"可能服务器挂掉，或次连接被封，请重试！")
-            return False
+            ha_login = False
         except Exception as e:
             return False
+        finally:
+            logger.info("Again!")
+            if g_conf.play_music:
+                play_music()
+            os.system("pause")
     return True
 
+def play_music():
+    logger.info("play music, name:%s" % MUSIC_NAME)
+    try:
+        winsound.PlaySound(MUSIC_NAME, winsound.SND_ASYNC)
+    except Exception as e:
+        logger.error("play music failed!")
 
 if __name__ == '__main__':
     #test_ocr()
     #test_reconnect()
-
 
     if len(sys.argv) > 1:
         CONF_NAME = sys.argv[1]
