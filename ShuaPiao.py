@@ -468,13 +468,13 @@ class HttpAuto:
             self.show_ticket(item['queryLeftNewDTO'])
         
         #get promote
-        cmd = raw_input("input cmd[r|q|K101]:")
+        cmd = raw_input("input cmd[r(etry)|q(uit)|TicketNumToBuy]:")
         cmd = cmd.strip()
         logger.info("input:%s" % cmd)
-        if cmd == "r":
+        if cmd == "r" or cmd == "retry":
             logger.info("retry")
             return -2
-        elif cmd == "q":
+        elif cmd == "q" or cmd == "quit":
             logger.info("quit")
             return 0
         else:
@@ -494,7 +494,8 @@ class HttpAuto:
     def query(self):
         logger.info("#############################Step3:Query#########")
         self.proxy_ext_header["Referer"] = "https://kyfw.12306.cn/otn/leftTicket/init"
-        url_query = "https://kyfw.12306.cn/otn/leftTicket/query?" + urllib.urlencode(g_conf.query_data)
+        #new proto queryT 2014-09-12
+        url_query = "https://kyfw.12306.cn/otn/leftTicket/queryT?" + urllib.urlencode(g_conf.query_data)
         logger.info("start query======>%s" % url_query)
         want_special = False
         
