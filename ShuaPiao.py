@@ -18,6 +18,7 @@ import cProfile
 import subprocess
 import winsound
 import xml.etree.ElementTree
+from gui.captcha import  show_captcha
 
 
 CONF_NAME = './my_xml_conf.xml'
@@ -308,6 +309,9 @@ class HttpAuto:
             pic_type = res.getheader('Content-Type').split(';')[0].split('/')[1]
             data = res.read()
             file_name = "./pass_code.%s" % pic_type
+            if pic_type == "json":
+                time.sleep(0.5)
+                continue
             f = open(file_name, 'wb')
             f.write(data)
             f.close()
@@ -319,7 +323,7 @@ class HttpAuto:
                 read_pass_code = call_tesseract(file_name)
 
             if  read_pass_code == '':
-                read_pass_code = raw_input("input passcode(%s):" % file_name)
+                read_pass_code = show_captcha(os.path.abspath("%s" % file_name))
                 if read_pass_code == "no":
                     logger.info("Get A new PassCode")
                     continue
@@ -496,7 +500,7 @@ class HttpAuto:
         logger.info("#############################Step3:Query#########")
         self.proxy_ext_header["Referer"] = "https://kyfw.12306.cn/otn/leftTicket/init"
         #new proto queryT 2014-09-12
-        url_query = "https://kyfw.12306.cn/otn/leftTicket/queryT?" + urllib.urlencode(g_conf.query_data)
+        url_query = "https://kyfw.12306.cn/otn/leftTicket/query?" + urllib.urlencode(g_conf.query_data)
         logger.info("start query======>%s" % url_query)
         want_special = False
         

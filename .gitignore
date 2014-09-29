@@ -1,0 +1,4 @@
+*.py[cod]
+*.sw[np]
+pass_code.*
+log.txt
