@@ -363,6 +363,7 @@ class HttpAuto:
             resp = json.loads(data)
             if resp['data'] != 'Y':
                 logger.info("rand code not correct:%s" % resp['data'])
+                time.sleep(2)
                 continue
             else:
                 ret = True
