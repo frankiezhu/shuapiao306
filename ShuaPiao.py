@@ -252,8 +252,8 @@ class HttpAuto:
         str1 = str1[:-1]
         self.passengerTicketStr = str1.encode('utf8')
         self.oldPassengerStr = str2.encode('utf8')
-        logger.info("new:%s" % self.passengerTicketStr)
-        logger.info("old:%s" % self.oldPassengerStr)
+        logger.info(u"new:%s" % self.passengerTicketStr.decode("utf-8"))
+        logger.info(u"old:%s" % self.oldPassengerStr.decode("utf-8"))
 
     def logout(self):
         url_logout = "https://kyfw.12306.cn/otn/login/loginOut"
@@ -657,7 +657,7 @@ class HttpAuto:
         logger.info("recv getQueueCount")
         if res_json['status'] != True:
             logger.error("getQueueCount failed:")
-            logger.error(data)          
+            logger.error(data.decode("utf-8"))          
             return False
         return True
 
@@ -705,7 +705,7 @@ class HttpAuto:
         logger.info("recv checkUser")
         if not res_json['data'].has_key('flag') or res_json['data']['flag'] != True:
             logger.error("check user failed:")
-            logger.error(data)
+            logger.error(data.decode("utf-8"))
             return False
         else:
             return True
@@ -728,7 +728,7 @@ class HttpAuto:
         res_json = json.loads(data)
         if res_json['status'] != True:
             logger.error("submitOrderRequest failed:")
-            logger.error(data)
+            logger.error(data.decode("utf-8"))
             sub_str = u"您还有未处理的订单".encode('utf8')
             err_msg = ''.join(res_json['messages']).encode('utf8')
             if sub_str in err_msg:
@@ -761,7 +761,7 @@ class HttpAuto:
         logger.info("recv confirmSingleForQueue")
         if res_json['data'].get('submitStatus') != True:
             logger.error("confirmSingleForQueue failed:")
-            logger.error(data)
+            logger.error(data.decode("utf-8"))
             return False
         else:
             return True
@@ -788,7 +788,7 @@ class HttpAuto:
             cnt = cnt + 1
             if not res_json.has_key('data') or res_json['data']['queryOrderWaitTimeStatus'] != True:
                 logger.error("queryOrderWaitTime error:")
-                logger.error(data)
+                logger.error(data.decode("utf-8"))
                 break
             if res_json['data']['waitCount']  == 0:
                 self.orderId = res_json['data']['orderId']
@@ -822,7 +822,7 @@ class HttpAuto:
                 return True
             else:
                 logger.info("get result error:")
-                logger.error(data)
+                logger.error(data.decode("utf-8"))
                 return False
         else:
             logger.info("#############################resultOrderForDcQueue Success #########")
@@ -847,11 +847,11 @@ class HttpAuto:
             return False
         if not res_json.has_key('data'):
             logger.info(u"没有订单信息!")
-            logger.error(data)
+            logger.error(data.decode("utf-8"))
             return False
         if not res_json['data'].has_key('orderDBList'):
             logger.info(u"出票失败，没有足够的票!")
-            logger.error(data)
+            logger.error(data.decode("utf-8"))
             return False
         else:
             logger.info(u"出票成功，请用浏览器打开未完成订单!")
