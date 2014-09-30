@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 #coding:utf-8
+# vim: ts=4 sw=4 et
 """
  ***All Rights Reserved
  run env: python 2.7
@@ -823,13 +824,48 @@ class HttpAuto:
             err_msg = res_json['data']['errMsg'].encode('utf8')
             success_msg = u"网络传输过程中数据丢失，请查看未完成订单，继续支付！".encode('utf8')
             if err_msg == success_msg:
-                logger.info(u"买票成功，请去付款!")
+                logger.info(u"存在未完成订单，买票可能成功!")
                 return True
             else:
                 logger.info("get result error:")
-                logger.info(data)
+                logger.error(data)
                 return False
         else:
+            logger.info("#############################resultOrderForDcQueue Success #########")
+            return True
+
+    @retries(3)
+    def queryMyOrderNoComplete(self):
+        logger.info("#############################Step14:queryMyOrderNoComplete #########")
+        url_result = "https://kyfw.12306.cn/otn/queryOrder/queryMyOrderNoComplete"
+        data = [
+                ('_json_att', '')
+                ]
+        post_data = urllib.urlencode(data)
+        logger.info("send queryMyOrderNoComplete=====>") #% url
+        g_conn.request('POST', url_result, body=post_data, headers=self.proxy_ext_header)
+        res = g_conn.getresponse()
+        if res.getheader('Content-Encoding') == 'gzip':
+            tmp = StringIO.StringIO(res.read())
+            gzipper = gzip.GzipFile(fileobj=tmp)
+            data = gzipper.read()
+        else:
+            data = res.read()
+        res_json = json.loads(data)
+        logger.info("recv queryMyOrderNoComplete")
+        if res_json['status'] != True:
+            logger.info(u"queryMyOrderNoComplete Fail!")
+            return False
+        if not res_json.has_key('data'):
+            logger.info(u"没有订单信息!")
+            logger.error(data)
+            return False
+        if not res_json['data'].has_key('orderDBList'):
+            logger.info(u"出票失败，没有足够的票!")
+            logger.error(data)
+            return False
+        else:
+            logger.info(u"出票成功，请用浏览器打开未完成订单!")
             logger.info("#############################Success check ticket in webbrowser #########")
             return True
 
@@ -881,6 +917,9 @@ class HttpAuto:
             return False
         #Step13
         if not self.resultOrderForDcQueue():
+            return False
+        #Step14
+        if not self.queryMyOrderNoComplete():
             return False
         return True
 
