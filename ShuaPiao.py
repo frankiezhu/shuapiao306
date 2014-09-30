@@ -516,13 +516,7 @@ class HttpAuto:
             q_cnt = q_cnt + 1
             g_conn.request('GET', url_query, headers=self.proxy_ext_header)
             res = g_conn.getresponse()
-            data = ''
-            if res.getheader('Content-Encoding') == 'gzip':
-                tmp = StringIO.StringIO(res.read())
-                gzipper = gzip.GzipFile(fileobj=tmp)
-                data = gzipper.read()
-            else:
-                data = res.read()
+            data = self.decode_response(res)
             res_json = json.loads(data)
             if res_json['status'] != True:
                 logger.info("parse json failed! data %s" % data)
@@ -658,7 +652,7 @@ class HttpAuto:
         logger.info("send getQueueCount=====>")  #% post_data
         g_conn.request('POST', url_queue_count, body=post_data, headers=self.proxy_ext_header)
         res = g_conn.getresponse()
-        data = res.read()
+        data = self.decode_response(res)
         res_json = json.loads(data)
         logger.info("recv getQueueCount")
         if res_json['status'] != True:
@@ -706,7 +700,7 @@ class HttpAuto:
         logger.info("send checkUser=====>")  #% post_data
         g_conn.request('POST', url_check_info, body=post_data, headers=self.proxy_ext_header)
         res = g_conn.getresponse()
-        data = res.read()
+        data = self.decode_response(res)
         res_json = json.loads(data)
         logger.info("recv checkUser")
         if not res_json['data'].has_key('flag') or res_json['data']['flag'] != True:
@@ -730,7 +724,7 @@ class HttpAuto:
         logger.info("send submitOrderRequest=====>")  #% post_data
         g_conn.request('POST', url_submit, body=post_data.encode("utf8"), headers=self.proxy_ext_header)
         res = g_conn.getresponse()
-        data = res.read()
+        data = self.decode_response(res)
         res_json = json.loads(data)
         if res_json['status'] != True:
             logger.error("submitOrderRequest failed:")
@@ -762,7 +756,7 @@ class HttpAuto:
         logger.info("send confirmSingleForQueue=====>")  #% post_data
         g_conn.request('POST', url_check_info, body=post_data, headers=self.proxy_ext_header)
         res = g_conn.getresponse()
-        data = res.read()
+        data = self.decode_response(res)
         res_json = json.loads(data)
         logger.info("recv confirmSingleForQueue")
         if res_json['data'].get('submitStatus') != True:
@@ -788,7 +782,7 @@ class HttpAuto:
             logger.info("send queryOrderWaitTime:%d=====>" % cnt) #% url
             g_conn.request('GET', url_query_wait, headers=self.proxy_ext_header)
             res = g_conn.getresponse()
-            data = res.read()
+            data = self.decode_response(res)
             res_json = json.loads(data)
             logger.info("recv queryOrderWaitTime")
             cnt = cnt + 1
@@ -817,7 +811,7 @@ class HttpAuto:
         logger.info("send resultOrderForDcQueue=====>") #% url
         g_conn.request('POST', url_result, body=post_data, headers=self.proxy_ext_header)
         res = g_conn.getresponse()
-        data = res.read()
+        data = self.decode_response(res)
         res_json = json.loads(data)
         logger.info("recv resultOrderForDcQueue")
         if res_json['data'].get('submitStatus') != True:
@@ -845,12 +839,7 @@ class HttpAuto:
         logger.info("send queryMyOrderNoComplete=====>") #% url
         g_conn.request('POST', url_result, body=post_data, headers=self.proxy_ext_header)
         res = g_conn.getresponse()
-        if res.getheader('Content-Encoding') == 'gzip':
-            tmp = StringIO.StringIO(res.read())
-            gzipper = gzip.GzipFile(fileobj=tmp)
-            data = gzipper.read()
-        else:
-            data = res.read()
+        data = self.decode_response(res)
         res_json = json.loads(data)
         logger.info("recv queryMyOrderNoComplete")
         if res_json['status'] != True:
@@ -885,7 +874,17 @@ class HttpAuto:
         res_json = json.loads(data)
         logger.info("recv getPassengerDTOs")
         return True
-        
+
+    def decode_response(self, res):
+        """Decode response using gzip"""
+        if res.getheader('Content-Encoding') == 'gzip':
+            tmp = StringIO.StringIO(res.read())
+            gzipper = gzip.GzipFile(fileobj=tmp)
+            data = gzipper.read()
+        else:
+            data = res.read()
+        return data;
+
     def buy(self, item):
         #Step4
         if not self.checkUser():
