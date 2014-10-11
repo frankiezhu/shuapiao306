@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 #coding:utf-8
+# vim: ts=4 sw=4 et
 """
  ***All Rights Reserved
  run env: python 2.7
@@ -18,6 +19,7 @@ import cProfile
 import subprocess
 import winsound
 import xml.etree.ElementTree
+from gui.captcha import  show_captcha
 
 
 CONF_NAME = './my_xml_conf.xml'
@@ -250,8 +252,8 @@ class HttpAuto:
         str1 = str1[:-1]
         self.passengerTicketStr = str1.encode('utf8')
         self.oldPassengerStr = str2.encode('utf8')
-        logger.info("new:%s" % self.passengerTicketStr)
-        logger.info("old:%s" % self.oldPassengerStr)
+        logger.info(u"new:%s" % self.passengerTicketStr.decode("utf-8"))
+        logger.info(u"old:%s" % self.oldPassengerStr.decode("utf-8"))
 
     def logout(self):
         url_logout = "https://kyfw.12306.cn/otn/login/loginOut"
@@ -308,6 +310,9 @@ class HttpAuto:
             pic_type = res.getheader('Content-Type').split(';')[0].split('/')[1]
             data = res.read()
             file_name = "./pass_code.%s" % pic_type
+            if pic_type == "json":
+                time.sleep(0.5)
+                continue
             f = open(file_name, 'wb')
             f.write(data)
             f.close()
@@ -319,7 +324,7 @@ class HttpAuto:
                 read_pass_code = call_tesseract(file_name)
 
             if  read_pass_code == '':
-                read_pass_code = raw_input("input passcode(%s):" % file_name)
+                read_pass_code = show_captcha(os.path.abspath("%s" % file_name))
                 if read_pass_code == "no":
                     logger.info("Get A new PassCode")
                     continue
@@ -363,6 +368,7 @@ class HttpAuto:
             resp = json.loads(data)
             if resp['data'] != 'Y':
                 logger.info("rand code not correct:%s" % resp['data'])
+                time.sleep(2)
                 continue
             else:
                 ret = True
@@ -495,7 +501,7 @@ class HttpAuto:
         logger.info("#############################Step3:Query#########")
         self.proxy_ext_header["Referer"] = "https://kyfw.12306.cn/otn/leftTicket/init"
         #new proto queryT 2014-09-12
-        url_query = "https://kyfw.12306.cn/otn/leftTicket/queryT?" + urllib.urlencode(g_conf.query_data)
+        url_query = "https://kyfw.12306.cn/otn/leftTicket/query?" + urllib.urlencode(g_conf.query_data)
         logger.info("start query======>%s" % url_query)
         want_special = False
         
@@ -510,13 +516,7 @@ class HttpAuto:
             q_cnt = q_cnt + 1
             g_conn.request('GET', url_query, headers=self.proxy_ext_header)
             res = g_conn.getresponse()
-            data = ''
-            if res.getheader('Content-Encoding') == 'gzip':
-                tmp = StringIO.StringIO(res.read())
-                gzipper = gzip.GzipFile(fileobj=tmp)
-                data = gzipper.read()
-            else:
-                data = res.read()
+            data = self.decode_response(res)
             res_json = json.loads(data)
             if res_json['status'] != True:
                 logger.info("parse json failed! data %s" % data)
@@ -652,12 +652,12 @@ class HttpAuto:
         logger.info("send getQueueCount=====>")  #% post_data
         g_conn.request('POST', url_queue_count, body=post_data, headers=self.proxy_ext_header)
         res = g_conn.getresponse()
-        data = res.read()
+        data = self.decode_response(res)
         res_json = json.loads(data)
         logger.info("recv getQueueCount")
         if res_json['status'] != True:
             logger.error("getQueueCount failed:")
-            logger.error(data)          
+            logger.error(data.decode("utf-8"))          
             return False
         return True
 
@@ -700,12 +700,12 @@ class HttpAuto:
         logger.info("send checkUser=====>")  #% post_data
         g_conn.request('POST', url_check_info, body=post_data, headers=self.proxy_ext_header)
         res = g_conn.getresponse()
-        data = res.read()
+        data = self.decode_response(res)
         res_json = json.loads(data)
         logger.info("recv checkUser")
         if not res_json['data'].has_key('flag') or res_json['data']['flag'] != True:
             logger.error("check user failed:")
-            logger.error(data)
+            logger.error(data.decode("utf-8"))
             return False
         else:
             return True
@@ -724,11 +724,11 @@ class HttpAuto:
         logger.info("send submitOrderRequest=====>")  #% post_data
         g_conn.request('POST', url_submit, body=post_data.encode("utf8"), headers=self.proxy_ext_header)
         res = g_conn.getresponse()
-        data = res.read()
+        data = self.decode_response(res)
         res_json = json.loads(data)
         if res_json['status'] != True:
             logger.error("submitOrderRequest failed:")
-            logger.error(data)
+            logger.error(data.decode("utf-8"))
             sub_str = u"您还有未处理的订单".encode('utf8')
             err_msg = ''.join(res_json['messages']).encode('utf8')
             if sub_str in err_msg:
@@ -756,12 +756,12 @@ class HttpAuto:
         logger.info("send confirmSingleForQueue=====>")  #% post_data
         g_conn.request('POST', url_check_info, body=post_data, headers=self.proxy_ext_header)
         res = g_conn.getresponse()
-        data = res.read()
+        data = self.decode_response(res)
         res_json = json.loads(data)
         logger.info("recv confirmSingleForQueue")
         if res_json['data'].get('submitStatus') != True:
             logger.error("confirmSingleForQueue failed:")
-            logger.error(data)
+            logger.error(data.decode("utf-8"))
             return False
         else:
             return True
@@ -782,13 +782,13 @@ class HttpAuto:
             logger.info("send queryOrderWaitTime:%d=====>" % cnt) #% url
             g_conn.request('GET', url_query_wait, headers=self.proxy_ext_header)
             res = g_conn.getresponse()
-            data = res.read()
+            data = self.decode_response(res)
             res_json = json.loads(data)
             logger.info("recv queryOrderWaitTime")
             cnt = cnt + 1
             if not res_json.has_key('data') or res_json['data']['queryOrderWaitTimeStatus'] != True:
                 logger.error("queryOrderWaitTime error:")
-                logger.error(data)
+                logger.error(data.decode("utf-8"))
                 break
             if res_json['data']['waitCount']  == 0:
                 self.orderId = res_json['data']['orderId']
@@ -811,20 +811,50 @@ class HttpAuto:
         logger.info("send resultOrderForDcQueue=====>") #% url
         g_conn.request('POST', url_result, body=post_data, headers=self.proxy_ext_header)
         res = g_conn.getresponse()
-        data = res.read()
+        data = self.decode_response(res)
         res_json = json.loads(data)
         logger.info("recv resultOrderForDcQueue")
         if res_json['data'].get('submitStatus') != True:
             err_msg = res_json['data']['errMsg'].encode('utf8')
             success_msg = u"网络传输过程中数据丢失，请查看未完成订单，继续支付！".encode('utf8')
             if err_msg == success_msg:
-                logger.info(u"买票成功，请去付款!")
+                logger.info(u"存在未完成订单，买票可能成功!")
                 return True
             else:
                 logger.info("get result error:")
-                logger.info(data)
+                logger.error(data.decode("utf-8"))
                 return False
         else:
+            logger.info("#############################resultOrderForDcQueue Success #########")
+            return True
+
+    @retries(3)
+    def queryMyOrderNoComplete(self):
+        logger.info("#############################Step14:queryMyOrderNoComplete #########")
+        url_result = "https://kyfw.12306.cn/otn/queryOrder/queryMyOrderNoComplete"
+        data = [
+                ('_json_att', '')
+                ]
+        post_data = urllib.urlencode(data)
+        logger.info("send queryMyOrderNoComplete=====>") #% url
+        g_conn.request('POST', url_result, body=post_data, headers=self.proxy_ext_header)
+        res = g_conn.getresponse()
+        data = self.decode_response(res)
+        res_json = json.loads(data)
+        logger.info("recv queryMyOrderNoComplete")
+        if res_json['status'] != True:
+            logger.info(u"queryMyOrderNoComplete Fail!")
+            return False
+        if not res_json.has_key('data'):
+            logger.info(u"没有订单信息!")
+            logger.error(data.decode("utf-8"))
+            return False
+        if not res_json['data'].has_key('orderDBList'):
+            logger.info(u"出票失败，没有足够的票!")
+            logger.error(data.decode("utf-8"))
+            return False
+        else:
+            logger.info(u"出票成功，请用浏览器打开未完成订单!")
             logger.info("#############################Success check ticket in webbrowser #########")
             return True
 
@@ -844,7 +874,17 @@ class HttpAuto:
         res_json = json.loads(data)
         logger.info("recv getPassengerDTOs")
         return True
-        
+
+    def decode_response(self, res):
+        """Decode response using gzip"""
+        if res.getheader('Content-Encoding') == 'gzip':
+            tmp = StringIO.StringIO(res.read())
+            gzipper = gzip.GzipFile(fileobj=tmp)
+            data = gzipper.read()
+        else:
+            data = res.read()
+        return data;
+
     def buy(self, item):
         #Step4
         if not self.checkUser():
@@ -876,6 +916,9 @@ class HttpAuto:
             return False
         #Step13
         if not self.resultOrderForDcQueue():
+            return False
+        #Step14
+        if not self.queryMyOrderNoComplete():
             return False
         return True
 
