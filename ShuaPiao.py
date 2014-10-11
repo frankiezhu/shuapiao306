@@ -4,8 +4,6 @@
 """
  ***All Rights Reserved
  run env: python 2.7
- @author frankiezhu
- @data 20140106
  ***
 """
 
@@ -501,7 +499,7 @@ class HttpAuto:
         logger.info("#############################Step3:Query#########")
         self.proxy_ext_header["Referer"] = "https://kyfw.12306.cn/otn/leftTicket/init"
         #new proto queryT 2014-09-12
-        url_query = "https://kyfw.12306.cn/otn/leftTicket/query?" + urllib.urlencode(g_conf.query_data)
+        url_query = "https://kyfw.12306.cn/otn/leftTicket/queryT?" + urllib.urlencode(g_conf.query_data)
         logger.info("start query======>%s" % url_query)
         want_special = False
         
