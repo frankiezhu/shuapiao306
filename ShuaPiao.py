@@ -37,6 +37,7 @@ class Config:
     query_sleep_time = float(1)
     max_auto_times = int(0)
     play_music = False
+    check_user = True
     seat_code_dict =  {
             "yz_num":["1"],
             "rz_num":["2"],
@@ -101,7 +102,12 @@ class Config:
         tmp = root.findall('play_music')
         if tmp and int(tmp[0].text.strip()):
             self.play_music = True
+        tmp = root.findall('check_user')
+        if tmp and not int(tmp[0].text.strip()):
+            self.check_user = False
+        
         return True
+    
 
     def show_config(self):
         logger.info("########show conf##############")
@@ -114,6 +120,7 @@ class Config:
         logger.info("Sleep time:%f" % self.query_sleep_time)
         logger.info("Auto OCR: %d" % self.max_auto_times)
         logger.info("Play music: %d" % self.play_music)
+        logger.info("check user: %d" % self.check_user)
         logger.info("End\n")
 
 ####################################Global#######################################
@@ -525,7 +532,8 @@ class HttpAuto:
             try:
                 res_json = json.loads(data)
             except ValueError:
-                logger.info("query return %s, retry" % data)
+                logger.info(u"http return, refresh %d times!" % q_cnt)
+                time.sleep(g_conf.query_sleep_time)
                 continue
             if res_json['status'] != True:
                 if res_json.has_key('c_url'):
@@ -533,17 +541,18 @@ class HttpAuto:
                     logger.info("change query url:%s" % url_query)
                 else:
                     logger.info("parse json failed! data %s" % data)
+                time.sleep(g_conf.query_sleep_time)
                 continue
             if not res_json.has_key('data') or not len(res_json['data']):
                 logger.info(u"没有查到任何车次，请确认你要查的车次信息")
-                continue
+                break
             result = {}
             ret = self.do_ticket(res_json, result, want_special)
             if ret == 0:
                 break
             elif ret == -2:
-                logger.info(u"no ticket, refresh %d times!" % q_cnt)
                 time.sleep(g_conf.query_sleep_time)
+                logger.info(u"no ticket, refresh %d times!" % q_cnt)
                 continue
 
         return True
@@ -900,7 +909,7 @@ class HttpAuto:
 
     def buy(self, item):
         #Step4
-        if not self.checkUser():
+        if g_conf.check_user and not self.checkUser():
             return False
         #Step5
         if not self.submitOrderRequest(item):
