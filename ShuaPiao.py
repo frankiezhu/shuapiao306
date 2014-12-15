@@ -221,6 +221,7 @@ class HttpAuto:
         #cockies
         self.sid = ''
         self.sip = ''
+        self.method=''
 
         #passenger info to be POST
         self.passengerTicketStr = ''
@@ -269,20 +270,24 @@ class HttpAuto:
         update = False
         for h in res.getheaders():
             if h[0] == "set-cookie":
-                l = h[1].split(',')[0].strip()
-                if l.startswith('JSESSIONID'):
-                    self.sid = l.split(';')[0].strip()
-                    update = True
-                    logger.info("Update sessionid "+self.sid)
-                if l.startswith('BIGipServerotn'):
-                    self.sip = l.split(';')[0].strip()
-                    update = True
-                    logger.info("Update sip:"+self.sip)
-                l = h[1].split(',')[1].strip()
-                if l.startswith('BIGipServerotn'):
-                    self.sip = l.split(';')[0].strip()
-                    update = True
-                    logger.info("Update sip:"+self.sip)
+                arr = h[1].strip().split(',')
+                for l in arr:
+                    l = l.strip()
+                    if l.startswith('JSESSIONID'):
+                        self.sid = l.split(';')[0].strip()
+                        update = True
+                        logger.info("Update sessionid "+self.sid)
+                        continue
+                    if l.startswith('BIGipServerotn'):
+                        self.sip = l.split(';')[0].strip()
+                        update = True
+                        logger.info("Update sip:"+self.sip)
+                        continue
+                    if l.startswith('current_captcha_type'):
+                        self.method = l.split(';')[0].strip()
+                        update = True
+                        logger.info("Update current_captcha_type:"+self.method)
+                        continue       
         return update
 
     def check_pass_code_common(self, module, rand_method):
@@ -302,7 +307,7 @@ class HttpAuto:
             logger.info("recv getPassCodeNew=====>:%s" % datetime.datetime.now())
             if module == 'login':
                 self.update_session_info(res)
-                self.ext_header["Cookie"] = self.sid+';'+self.sip
+                self.ext_header["Cookie"] = self.sid + '; ' + self.sip + '; ' + self.method
             
             #save file  
             pic_type = res.getheader('Content-Type').split(';')[0].split('/')[1]
@@ -349,22 +354,23 @@ class HttpAuto:
             elif module == 'login':
                 self.pass_code = read_pass_code
                 data = [
+                        ("rand", rand_method),
                         ("randCode", read_pass_code),
-                        ("rand", rand_method)
+                        ("randCode_validate", ''),
                        ]
             else:
                 pass
 
             post_data = urllib.urlencode(data)
-            logger.info("send checkRandCodeAnsyn=====>:") #% post_data
+            logger.info("send checkRandCodeAnsyn=====>:%s" % post_data) 
             
             url_check_rand = "https://kyfw.12306.cn/otn/passcodeNew/checkRandCodeAnsyn"
             g_conn.request('POST', url_check_rand, body=post_data, headers=header)
             res = g_conn.getresponse()
             data = res.read()
-            logger.info("recv checkRandCodeAnsyn")
+            logger.info("recv checkRandCodeAnsyn:%s" % data)
             resp = json.loads(data)
-            if resp['data'] != 'Y':
+            if (type(resp) is str and resp['data'] != 'Y') or (type(resp) is dict  and resp['data']['result'] != '1'):
                 logger.info("rand code not correct:%s" % resp['data'])
                 time.sleep(2)
                 continue
@@ -498,9 +504,10 @@ class HttpAuto:
     def query(self):
         logger.info("#############################Step3:Query#########")
         self.proxy_ext_header["Referer"] = "https://kyfw.12306.cn/otn/leftTicket/init"
-        #new proto queryT 2014-09-12
-        url_query = "https://kyfw.12306.cn/otn/leftTicket/queryT?" + urllib.urlencode(g_conf.query_data)
-        logger.info("start query======>%s" % url_query)
+        url_base = "https://kyfw.12306.cn/otn/"
+        query_string = "leftTicket/query"
+        url_query = url_base + query_string + "?" + urllib.urlencode(g_conf.query_data)
+        logger.info("start init query======>%s" % url_query)
         want_special = False
         
         if len(g_conf.buy_list) != 0:
@@ -515,11 +522,19 @@ class HttpAuto:
             g_conn.request('GET', url_query, headers=self.proxy_ext_header)
             res = g_conn.getresponse()
             data = self.decode_response(res)
-            res_json = json.loads(data)
-            if res_json['status'] != True:
-                logger.info("parse json failed! data %s" % data)
+            try:
+                res_json = json.loads(data)
+            except ValueError:
+                logger.info("query return %s, retry" % data)
                 continue
-            if not len(res_json['data']):
+            if res_json['status'] != True:
+                if res_json.has_key('c_url'):
+                    url_query = url_base + res_json['c_url'] + "?" + urllib.urlencode(g_conf.query_data)
+                    logger.info("change query url:%s" % url_query)
+                else:
+                    logger.info("parse json failed! data %s" % data)
+                continue
+            if not res_json.has_key('data') or not len(res_json['data']):
                 logger.info(u"没有查到任何车次，请确认你要查的车次信息")
                 continue
             result = {}
@@ -1007,6 +1022,7 @@ def main(conf_name):
             logger.error(u"可能服务器挂掉，或次连接被封，请重试！")
             ha_login = False
         except Exception as e:
+            print e
             return False
         finally:
             logger.info("Again!")
